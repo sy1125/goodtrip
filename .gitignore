@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local db & uploads
+goodtrip.db
+goodtrip.db-wal
+goodtrip.db-shm
+/public/uploads/*
+!/public/uploads/.gitkeep
