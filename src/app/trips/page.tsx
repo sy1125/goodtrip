@@ -5,7 +5,7 @@ import {
   Search, SlidersHorizontal, Calendar, Clock, Camera,
   MapPin, Plus, X, Upload, Edit3, Trash2,
   ChevronLeft, ChevronRight, Image as ImageIcon,
-  ArrowUpDown, Loader2,
+  ArrowUpDown, Loader2, Heart,
 } from "lucide-react";
 
 /* ───── Types ───── */
@@ -368,6 +368,7 @@ export default function TripsPage() {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
 
   // Filters
   const [search, setSearch] = useState("");
@@ -387,17 +388,13 @@ export default function TripsPage() {
   const loadTrips = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({
-        limit: String(limit),
-        offset: String(page * limit),
-        sort: sortField,
-        order: sortOrder,
-        search,
-      });
-      const res = await fetch(`/api/trips?${params}`);
-      const data = await res.json();
-      setTrips(data.items || []);
-      setTotal(data.total || 0);
+      const [tripsRes, favRes] = await Promise.all([
+        fetch(`/api/trips?${new URLSearchParams({ limit: String(limit), offset: String(page * limit), sort: sortField, order: sortOrder, search })}`).then(r => r.json()),
+        fetch("/api/favorites").then(r => r.json()),
+      ]);
+      setTrips(tripsRes.items || []);
+      setTotal(tripsRes.total || 0);
+      setFavoriteIds(new Set((favRes || []).map((f: { id: string }) => f.id)));
     } catch (err) {
       console.error("로드 실패:", err);
     } finally {
@@ -406,6 +403,17 @@ export default function TripsPage() {
   }, [page, sortField, sortOrder, search]);
 
   useEffect(() => { loadTrips(); }, [loadTrips]);
+
+  const handleToggleFavorite = async (tripId: string) => {
+    const isFav = favoriteIds.has(tripId);
+    if (isFav) {
+      await fetch("/api/favorites", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ trip_id: tripId }) });
+      setFavoriteIds(prev => { const n = new Set(prev); n.delete(tripId); return n; });
+    } else {
+      await fetch("/api/favorites", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ trip_id: tripId }) });
+      setFavoriteIds(prev => new Set(prev).add(tripId));
+    }
+  };
 
   const handleDelete = async (id: string) => {
     if (!confirm("이 여행 기록을 삭제하시겠습니까?")) return;
@@ -532,6 +540,10 @@ export default function TripsPage() {
                     <button onClick={(e) => { e.stopPropagation(); handleDelete(trip.id); }}
                       className="w-7 h-7 rounded-full bg-white/90 flex items-center justify-center hover:bg-white"><Trash2 size={12} className="text-red-500" /></button>
                   </div>
+                  <button onClick={(e) => { e.stopPropagation(); handleToggleFavorite(trip.id); }}
+                    className="absolute top-3 right-3 w-7 h-7 rounded-full bg-white/90 flex items-center justify-center hover:bg-white shadow-sm">
+                    <Heart size={12} className={favoriteIds.has(trip.id) ? "text-rose-500 fill-rose-500" : "text-gray-400"} />
+                  </button>
                 </div>
                 <div className="p-4">
                   <div className="flex items-center justify-between text-xs text-muted">
@@ -578,6 +590,10 @@ export default function TripsPage() {
                   {trip.notes && <p className="text-xs text-muted mt-1 truncate">{trip.notes}</p>}
                 </div>
                 <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={(e) => { e.stopPropagation(); handleToggleFavorite(trip.id); }}
+                    className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center hover:bg-rose-50">
+                    <Heart size={13} className={favoriteIds.has(trip.id) ? "text-rose-500 fill-rose-500" : "text-gray-400"} />
+                  </button>
                   <button onClick={(e) => { e.stopPropagation(); setEditingTrip(trip); setShowForm(true); }}
                     className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center hover:bg-gray-200"><Edit3 size={13} className="text-gray-600" /></button>
                   <button onClick={(e) => { e.stopPropagation(); handleDelete(trip.id); }}

@@ -5,7 +5,7 @@ import {
   Plane, MapPin, Flag, Calendar, Camera, Clock,
   TrendingUp, Plus, X, Upload,
   Trash2, Edit3, ChevronLeft, ChevronRight, Image as ImageIcon,
-  Search, Loader2,
+  Search, Loader2, Heart,
 } from "lucide-react";
 
 /* ───── Types ───── */
@@ -172,7 +172,7 @@ function AutocompleteInput({
 
 /* ───── Components ───── */
 
-function TripCard({ trip, onEdit, onDelete }: { trip: Trip; onEdit: () => void; onDelete: () => void }) {
+function TripCard({ trip, onEdit, onDelete, isFavorite, onToggleFavorite }: { trip: Trip; onEdit: () => void; onDelete: () => void; isFavorite: boolean; onToggleFavorite: () => void }) {
   const days = Math.ceil(
     (new Date(trip.end_date).getTime() - new Date(trip.start_date).getTime()) / 86400000
   ) + 1;
@@ -202,6 +202,10 @@ function TripCard({ trip, onEdit, onDelete }: { trip: Trip; onEdit: () => void; 
             <Trash2 size={12} className="text-red-500" />
           </button>
         </div>
+        <button onClick={(e) => { e.stopPropagation(); onToggleFavorite(); }}
+          className="absolute top-3 right-3 w-7 h-7 rounded-full bg-white/90 flex items-center justify-center hover:bg-white shadow-sm">
+          <Heart size={12} className={isFavorite ? "text-rose-500 fill-rose-500" : "text-gray-400"} />
+        </button>
       </div>
       <div className="p-4">
         <div className="flex items-center justify-between text-xs text-muted">
@@ -656,6 +660,7 @@ export default function Home() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [loading, setLoading] = useState(true);
+  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
 
   const [showForm, setShowForm] = useState(false);
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
@@ -664,12 +669,14 @@ export default function Home() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [statsRes, tripsRes] = await Promise.all([
+      const [statsRes, tripsRes, favRes] = await Promise.all([
         fetch("/api/stats").then((r) => r.json()),
         fetch("/api/trips?limit=50").then((r) => r.json()),
+        fetch("/api/favorites").then((r) => r.json()),
       ]);
       setStats(statsRes);
       setTrips(tripsRes.items || []);
+      setFavoriteIds(new Set((favRes || []).map((f: { id: string }) => f.id)));
     } catch (err) {
       console.error("데이터 로드 실패:", err);
     } finally {
@@ -683,6 +690,17 @@ export default function Home() {
     if (!confirm("이 여행 기록을 삭제하시겠습니까?")) return;
     await fetch(`/api/trips/${id}`, { method: "DELETE" });
     loadData();
+  };
+
+  const handleToggleFavorite = async (tripId: string) => {
+    const isFav = favoriteIds.has(tripId);
+    if (isFav) {
+      await fetch("/api/favorites", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ trip_id: tripId }) });
+      setFavoriteIds(prev => { const n = new Set(prev); n.delete(tripId); return n; });
+    } else {
+      await fetch("/api/favorites", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ trip_id: tripId }) });
+      setFavoriteIds(prev => new Set(prev).add(tripId));
+    }
   };
 
   const handleTripClick = (trip: Trip) => {
@@ -792,6 +810,8 @@ export default function Home() {
                   trip={trip}
                   onEdit={() => { setEditingTrip(trip); setShowForm(true); }}
                   onDelete={() => handleDelete(trip.id)}
+                  isFavorite={favoriteIds.has(trip.id)}
+                  onToggleFavorite={() => handleToggleFavorite(trip.id)}
                 />
               </div>
             ))}

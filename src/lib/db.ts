@@ -46,6 +46,11 @@ db.exec(`
     notes TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS favorites (
+    trip_id TEXT PRIMARY KEY REFERENCES trips(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
 `);
 
 export default db;
