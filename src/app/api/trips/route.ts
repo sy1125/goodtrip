@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import db from "@/lib/db";
 import { v4 as uuidv4 } from "uuid";
+import { geocode } from "@/lib/geocode";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
@@ -48,6 +49,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "city, country, start_date, end_date are required" }, { status: 400 });
   }
 
+  // Geocode city+country via Nominatim (with DB cache)
+  const coords = await geocode(city, country);
+
   const id = uuidv4();
 
   const transaction = db.transaction(() => {
@@ -69,5 +73,5 @@ export async function POST(req: NextRequest) {
   const trip = db.prepare("SELECT * FROM trips WHERE id = ?").get(id) as Record<string, unknown>;
   const photos = db.prepare("SELECT id, file_path, caption FROM trip_photos WHERE trip_id = ?").all(id);
 
-  return NextResponse.json({ ...trip, photos }, { status: 201 });
+  return NextResponse.json({ ...trip, photos, lat: coords?.lat ?? null, lng: coords?.lng ?? null }, { status: 201 });
 }

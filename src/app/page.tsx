@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Plane, MapPin, Flag, Calendar, Camera, Clock,
   TrendingUp, Plus, X, Upload,
   Trash2, Edit3, ChevronLeft, ChevronRight, Image as ImageIcon,
+  Search, Loader2,
 } from "lucide-react";
 
 /* ───── Types ───── */
@@ -46,6 +47,128 @@ const timelineDotColors = [
   "bg-primary", "bg-accent", "bg-emerald-500", "bg-violet-500",
   "bg-rose-500", "bg-sky-500", "bg-amber-500", "bg-lime-500",
 ];
+
+/* ───── Autocomplete Input ───── */
+
+interface GeoSuggestion {
+  display_name: string;
+  lat: number;
+  lng: number;
+  city: string;
+  country: string;
+}
+
+function AutocompleteInput({
+  value,
+  onChange,
+  placeholder,
+  label,
+  required,
+  searchType,
+  extraQuery,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  label: string;
+  required?: boolean;
+  searchType: "country" | "city";
+  extraQuery?: string;
+}) {
+  const [suggestions, setSuggestions] = useState<GeoSuggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const fetchSuggestions = useCallback(
+    async (query: string) => {
+      if (query.length < 2) {
+        setSuggestions([]);
+        return;
+      }
+      setSearching(true);
+      try {
+        const q = extraQuery ? `${query}, ${extraQuery}` : query;
+        const res = await fetch(
+          `/api/geocode/search?q=${encodeURIComponent(q)}&type=${searchType}`
+        );
+        const data: GeoSuggestion[] = await res.json();
+        setSuggestions(data);
+      } catch {
+        setSuggestions([]);
+      } finally {
+        setSearching(false);
+      }
+    },
+    [searchType, extraQuery]
+  );
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    onChange(val);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => fetchSuggestions(val), 400);
+    setShowSuggestions(true);
+  };
+
+  const handleSelect = (suggestion: GeoSuggestion) => {
+    if (searchType === "country") {
+      onChange(suggestion.country || suggestion.display_name.split(",").pop()?.trim() || suggestion.display_name);
+    } else {
+      const cityName = suggestion.city || suggestion.display_name.split(",")[0]?.trim() || value;
+      onChange(cityName);
+    }
+    setShowSuggestions(false);
+    setSuggestions([]);
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  return (
+    <div ref={containerRef} className="relative">
+      <label className="text-xs font-medium text-muted block mb-1.5">
+        {label} {required && "*"}
+      </label>
+      <div className="relative">
+        <input
+          type="text"
+          value={value}
+          onChange={handleChange}
+          onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
+          placeholder={placeholder}
+          className="w-full px-3 py-2 pr-8 text-sm border border-card-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/30"
+        />
+        <div className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted pointer-events-none">
+          {searching ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+        </div>
+      </div>
+      {showSuggestions && suggestions.length > 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-card-border rounded-xl shadow-lg max-h-48 overflow-y-auto">
+          {suggestions.map((s, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => handleSelect(s)}
+              className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 border-b border-gray-100 last:border-b-0 flex items-start gap-2"
+            >
+              <MapPin size={12} className="text-primary mt-0.5 flex-shrink-0" />
+              <span className="text-foreground line-clamp-1">{s.display_name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /* ───── Components ───── */
 
@@ -198,7 +321,7 @@ function TripFormModal({
       const coverPath = allPaths.length > 0 ? allPaths[0] : null;
       const photoPaths = allPaths.slice(1);
 
-      // 3. 여행 저장
+      // 3. 여행 저장 (좌표는 서버에서 자동 geocoding)
       const body = {
         city, country, start_date: startDate, end_date: endDate,
         cover_image: coverPath, notes: notes || null,
@@ -283,20 +406,24 @@ function TripFormModal({
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-medium text-muted block mb-1.5">도시 *</label>
-              <input value={city} onChange={(e) => setCity(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-card-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/30"
-                placeholder="도쿄" />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted block mb-1.5">국가 *</label>
-              <input value={country} onChange={(e) => setCountry(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-card-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/30"
-                placeholder="일본" />
-            </div>
-          </div>
+          <AutocompleteInput
+            value={country}
+            onChange={setCountry}
+            placeholder="예: 일본, 프랑스, 미국"
+            label="국가"
+            required
+            searchType="country"
+          />
+
+          <AutocompleteInput
+            value={city}
+            onChange={setCity}
+            placeholder="예: 도쿄, 파리, 뉴욕"
+            label="도시"
+            required
+            searchType="city"
+            extraQuery={country}
+          />
 
           <div className="grid grid-cols-2 gap-3">
             <div>

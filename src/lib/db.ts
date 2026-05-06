@@ -29,6 +29,14 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS city_coords (
+    city TEXT NOT NULL,
+    country TEXT NOT NULL,
+    lat REAL NOT NULL,
+    lng REAL NOT NULL,
+    PRIMARY KEY (city, country)
+  );
+
   CREATE TABLE IF NOT EXISTS upcoming_trips (
     id TEXT PRIMARY KEY,
     city TEXT NOT NULL,

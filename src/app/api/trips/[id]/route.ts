@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import db from "@/lib/db";
+import { geocode } from "@/lib/geocode";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -19,6 +20,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const existing = db.prepare("SELECT id FROM trips WHERE id = ?").get(id);
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  // Geocode if city/country provided
+  if (city && country) {
+    await geocode(city, country);
+  }
 
   const transaction = db.transaction(() => {
     db.prepare(`

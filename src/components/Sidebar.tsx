@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   Globe2,
   Map,
@@ -18,7 +19,7 @@ import {
 } from "lucide-react";
 
 const navItems = [
-  { icon: Globe2, label: "홈", href: "/", active: true },
+  { icon: Globe2, label: "홈", href: "/" },
   { icon: Map, label: "세계 지도", href: "/map" },
   { icon: BookOpen, label: "여행 기록", href: "/trips" },
   { icon: Camera, label: "갤러리", href: "/gallery" },
@@ -30,6 +31,7 @@ const navItems = [
 
 export default function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const pathname = usePathname();
 
   return (
     <>
@@ -57,14 +59,14 @@ export default function Sidebar() {
       >
         {/* Logo */}
         <div className="flex items-center justify-between px-6 h-16 border-b border-white/10">
-          <div className="flex items-center gap-2.5">
+          <Link href="/" className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
               <Plane size={16} className="text-white -rotate-45" />
             </div>
             <span className="text-lg font-bold text-white tracking-tight">
               GoodTrip
             </span>
-          </div>
+          </Link>
           <button
             onClick={() => setMobileOpen(false)}
             className="lg:hidden text-sidebar-text hover:text-white"
@@ -75,24 +77,27 @@ export default function Sidebar() {
 
         {/* Nav */}
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-          {navItems.map((item) => (
-            <Link
-              key={item.label}
-              href={item.href}
-              onClick={() => setMobileOpen(false)}
-              className={`group flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                item.active
-                  ? "bg-white/10 text-white"
-                  : "text-sidebar-text hover:bg-white/5 hover:text-white"
-              }`}
-            >
-              <item.icon size={18} />
-              <span className="flex-1">{item.label}</span>
-              {item.active && (
-                <ChevronRight size={14} className="text-white/40" />
-              )}
-            </Link>
-          ))}
+          {navItems.map((item) => {
+            const isActive = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+            return (
+              <Link
+                key={item.label}
+                href={item.href}
+                onClick={() => setMobileOpen(false)}
+                className={`group flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                  isActive
+                    ? "bg-white/10 text-white"
+                    : "text-sidebar-text hover:bg-white/5 hover:text-white"
+                }`}
+              >
+                <item.icon size={18} />
+                <span className="flex-1">{item.label}</span>
+                {isActive && (
+                  <ChevronRight size={14} className="text-white/40" />
+                )}
+              </Link>
+            );
+          })}
         </nav>
 
         {/* Travel Quote */}
