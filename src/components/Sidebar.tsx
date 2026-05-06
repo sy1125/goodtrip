@@ -16,6 +16,7 @@ import {
   X,
   ChevronRight,
   Plane,
+  PlaneTakeoff,
 } from "lucide-react";
 
 const navItems = [
@@ -25,6 +26,7 @@ const navItems = [
   { icon: Camera, label: "갤러리", href: "/gallery" },
   { icon: CalendarDays, label: "타임라인", href: "/timeline" },
   { icon: BarChart3, label: "통계", href: "/stats" },
+  { icon: PlaneTakeoff, label: "예정된 여행", href: "/upcoming" },
   { icon: Heart, label: "즐겨찾기", href: "/favorites" },
   { icon: Settings, label: "설정", href: "/settings" },
 ];
