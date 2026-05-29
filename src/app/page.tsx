@@ -774,10 +774,8 @@ export default function Home() {
             </div>
             <div className="flex items-center gap-4 sm:ml-auto">
               <div className="px-3 py-1.5 bg-white/20 rounded-lg backdrop-blur-sm text-center">
-                <p className="text-lg font-bold">{daysUntil}</p>
-                <p className="text-[10px] text-white/70">일 남음</p>
+                <p className="text-lg font-bold">D-{daysUntil}</p>
               </div>
-              {upcoming.notes && <p className="text-sm text-white/80 max-w-xs">{upcoming.notes}</p>}
             </div>
           </div>
         </div>
@@ -803,7 +801,7 @@ export default function Home() {
             <h2 className="text-lg font-bold text-foreground">최근 여행</h2>
             <span className="text-xs text-muted">{trips.length}개의 여행</span>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-4 lg:[display:flex] lg:flex-wrap lg:[&>*]:max-w-sm lg:[&>*]:w-[calc(33.333%-0.667rem)]">
             {trips.map((trip) => (
               <div key={trip.id} onClick={() => handleTripClick(trip)} className="cursor-pointer">
                 <TripCard

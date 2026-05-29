@@ -115,7 +115,7 @@ export default function SettingsPage() {
 
   const handleResetData = async () => {
     if (!confirm("정말로 모든 데이터를 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.")) return;
-    if (!confirm("마지막으로 확인합니다. 모든 여행 기록, 사진, 즐겨찾기가 삭제됩니다.")) return;
+    if (!confirm("마지막으로 확인합니다. 모든 여행 기록, 예정된 여행, 사진, 즐겨찾기가 삭제됩니다.")) return;
 
     try {
       const res = await fetch("/api/settings/reset", { method: "POST" });
@@ -174,10 +174,14 @@ export default function SettingsPage() {
             <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
           </div>
         ) : dbInfo && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
             <div className="bg-gray-50 rounded-xl p-3 text-center">
               <p className="text-xl font-bold text-foreground">{dbInfo.totalTrips}</p>
               <p className="text-[11px] text-muted">여행 기록</p>
+            </div>
+            <div className="bg-gray-50 rounded-xl p-3 text-center">
+              <p className="text-xl font-bold text-foreground">{dbInfo.totalUpcoming}</p>
+              <p className="text-[11px] text-muted">예정된 여행</p>
             </div>
             <div className="bg-gray-50 rounded-xl p-3 text-center">
               <p className="text-xl font-bold text-foreground">{dbInfo.totalPhotos}</p>
@@ -290,7 +294,7 @@ export default function SettingsPage() {
         <div className="flex items-center justify-between p-3 bg-red-50 rounded-xl">
           <div>
             <p className="text-sm font-medium text-red-700">모든 데이터 삭제</p>
-            <p className="text-xs text-red-500">여행 기록, 사진, 즐겨찾기 등 모든 데이터가 영구 삭제됩니다.</p>
+            <p className="text-xs text-red-500">여행 기록, 예정된 여행, 사진, 즐겨찾기 등 모든 데이터가 영구 삭제됩니다.</p>
           </div>
           <button onClick={handleResetData}
             className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-red-500 rounded-lg hover:bg-red-600">
