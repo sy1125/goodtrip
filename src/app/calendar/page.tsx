@@ -3,10 +3,18 @@
 import { useState, useEffect, useCallback } from "react";
 import { ChevronLeft, ChevronRight, MapPin, PlaneTakeoff, X, Calendar, Clock, Camera, Image as ImageIcon } from "lucide-react";
 
+interface Destination {
+  city: string;
+  country: string;
+  start_date?: string;
+  end_date?: string;
+}
+
 interface Trip {
   id: string;
   city: string;
   country: string;
+  destinations?: Destination[];
   start_date: string;
   end_date: string;
   cover_image: string | null;
@@ -45,6 +53,29 @@ function isDateInRange(date: string, start: string, end: string) {
   return date >= start && date <= end;
 }
 
+function getCityForDate(trip: Trip, dateStr: string): string {
+  if (trip.destinations && trip.destinations.length > 0) {
+    for (const d of trip.destinations) {
+      if (d.start_date && d.end_date && dateStr >= d.start_date && dateStr <= d.end_date) {
+        return d.city;
+      }
+    }
+    // Fallback to first destination
+    return trip.destinations[0]?.city || trip.city;
+  }
+  return trip.city;
+}
+
+function tripLabel(t: { destinations?: Destination[]; city?: string; country?: string }) {
+  const dests = t.destinations || [];
+  if (dests.length > 0)
+    return {
+      cities: dests.map((d) => d.city).join(" → "),
+      countries: [...new Set(dests.map((d) => d.country))].join(", "),
+    };
+  return { cities: t.city || "", countries: t.country || "" };
+}
+
 function TripDetailModal({ trip, onClose }: { trip: Trip; onClose: () => void }) {
   const days = Math.ceil(
     (new Date(trip.end_date).getTime() - new Date(trip.start_date).getTime()) / 86400000
@@ -58,7 +89,7 @@ function TripDetailModal({ trip, onClose }: { trip: Trip; onClose: () => void })
         {/* 커버 */}
         <div className="relative h-48 bg-gray-100">
           {trip.cover_image ? (
-            <img src={trip.cover_image} alt={trip.city} className="w-full h-full object-cover" />
+            <img src={trip.cover_image} alt={tripLabel(trip).cities} className="w-full h-full object-cover" />
           ) : (
             <div className={`w-full h-full flex items-center justify-center ${trip.upcoming ? "bg-orange-50" : ""}`}>
               {trip.upcoming ? (
@@ -74,12 +105,12 @@ function TripDetailModal({ trip, onClose }: { trip: Trip; onClose: () => void })
           </button>
           <div className="absolute bottom-4 left-5">
             <div className="flex items-center gap-2">
-              <h2 className="text-xl font-bold text-white">{trip.city}</h2>
+              <h2 className="text-xl font-bold text-white">{tripLabel(trip).cities}</h2>
               {trip.upcoming && (
                 <span className="text-[10px] font-semibold text-orange-200 bg-orange-500/40 px-2 py-0.5 rounded-full backdrop-blur-sm">예정된 여행</span>
               )}
             </div>
-            <p className="text-white/70 text-sm">{trip.country}</p>
+            <p className="text-white/70 text-sm">{tripLabel(trip).countries}</p>
           </div>
         </div>
 
@@ -92,6 +123,23 @@ function TripDetailModal({ trip, onClose }: { trip: Trip; onClose: () => void })
               <span className="flex items-center gap-1.5"><Camera size={14} /> {photos.length}장</span>
             )}
           </div>
+
+          {/* 도시별 일정 */}
+          {trip.destinations && trip.destinations.length > 1 && (
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted">여행 일정</p>
+              {trip.destinations.map((d, i) => (
+                <div key={i} className="flex items-center gap-2 text-xs text-muted">
+                  <span className="w-4 text-center text-[10px] font-semibold text-primary">{i + 1}</span>
+                  <span className="font-medium text-foreground">{d.city}</span>
+                  <span className="text-muted">{d.country}</span>
+                  {d.start_date && d.end_date && (
+                    <span className="ml-auto text-[10px]">{d.start_date} ~ {d.end_date}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* 메모 */}
           {trip.notes && (
@@ -275,7 +323,7 @@ export default function CalendarPage() {
                         key={trip.id}
                         className={`text-[10px] leading-tight font-medium px-1.5 py-0.5 rounded border truncate ${tripColorMap.get(trip.id)}`}
                       >
-                        {trip.city}
+                        {getCityForDate(trip, dateStr)}
                       </div>
                     ))}
                     {dayTrips.length > 2 && (
@@ -306,7 +354,7 @@ export default function CalendarPage() {
                       >
                         <div className={`w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 ${trip.upcoming ? "bg-orange-100" : "bg-gray-100"}`}>
                           {trip.cover_image ? (
-                            <img src={trip.cover_image} alt={trip.city} className="w-full h-full object-cover" />
+                            <img src={trip.cover_image} alt={tripLabel(trip).cities} className="w-full h-full object-cover" />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center text-gray-300">
                               {trip.upcoming ? <PlaneTakeoff size={16} className="text-orange-400" /> : <MapPin size={16} />}
@@ -315,12 +363,17 @@ export default function CalendarPage() {
                         </div>
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
-                            <p className="text-sm font-semibold text-foreground">{trip.city}</p>
+                            <p className="text-sm font-semibold text-foreground">{tripLabel(trip).cities}</p>
                             {trip.upcoming && (
                               <span className="text-[10px] font-medium text-orange-600 bg-orange-100 px-1.5 py-0.5 rounded">예정</span>
                             )}
                           </div>
-                          <p className="text-xs text-muted">{trip.country}</p>
+                          {trip.destinations && trip.destinations.length > 1 && selectedDate && (
+                            <span className="text-[10px] text-primary font-medium">
+                              {getCityForDate(trip, selectedDate)}에 체류 중
+                            </span>
+                          )}
+                          <p className="text-xs text-muted">{tripLabel(trip).countries}</p>
                           <p className="text-[10px] text-muted mt-0.5">
                             {trip.start_date} ~ {trip.end_date}
                           </p>

@@ -14,16 +14,34 @@ interface Photo {
   caption: string | null;
 }
 
+interface Destination {
+  city: string;
+  country: string;
+  start_date?: string;
+  end_date?: string;
+}
+
 interface Trip {
   id: string;
   city: string;
   country: string;
+  destinations: Destination[];
   start_date: string;
   end_date: string;
   cover_image: string | null;
   notes: string | null;
   photos: Photo[];
   favorited_at?: string;
+}
+
+/* ───── Helpers ───── */
+
+function tripLabel(t: { destinations?: Destination[] }) {
+  const dests = t.destinations || [];
+  return {
+    cities: dests.map(d => d.city).join(" → "),
+    countries: [...new Set(dests.map(d => d.country))].join(", "),
+  };
 }
 
 /* ───── Detail Modal ───── */
@@ -42,7 +60,7 @@ function TripDetailModal({ trip, onClose }: { trip: Trip; onClose: () => void })
       <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="relative h-56 bg-gray-100">
           {trip.cover_image ? (
-            <img src={trip.cover_image} alt={trip.city} className="w-full h-full object-cover" />
+            <img src={trip.cover_image} alt={tripLabel(trip).cities} className="w-full h-full object-cover" />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-gray-300"><ImageIcon size={64} /></div>
           )}
@@ -52,8 +70,8 @@ function TripDetailModal({ trip, onClose }: { trip: Trip; onClose: () => void })
             <X size={16} />
           </button>
           <div className="absolute bottom-4 left-6">
-            <h2 className="text-2xl font-bold text-white">{trip.city}</h2>
-            <p className="text-white/70 text-sm">{trip.country}</p>
+            <h2 className="text-2xl font-bold text-white">{tripLabel(trip).cities}</h2>
+            <p className="text-white/70 text-sm">{tripLabel(trip).countries}</p>
           </div>
         </div>
         <div className="p-6 space-y-5">
@@ -61,6 +79,21 @@ function TripDetailModal({ trip, onClose }: { trip: Trip; onClose: () => void })
             <span className="flex items-center gap-1.5"><Calendar size={14} /> {trip.start_date} — {trip.end_date}</span>
             <span className="flex items-center gap-1.5"><Clock size={14} /> {days}일</span>
           </div>
+          {trip.destinations && trip.destinations.length > 1 && (
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted">여행 일정</p>
+              {trip.destinations.map((d, i) => (
+                <div key={i} className="flex items-center gap-2 text-xs text-muted">
+                  <span className="w-4 text-center text-[10px] font-semibold text-primary">{i + 1}</span>
+                  <span className="font-medium text-foreground">{d.city}</span>
+                  <span className="text-muted">{d.country}</span>
+                  {d.start_date && d.end_date && (
+                    <span className="ml-auto text-[10px]">{d.start_date} ~ {d.end_date}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
           {trip.notes && (
             <div>
               <p className="text-xs font-medium text-muted mb-1">메모</p>
@@ -175,14 +208,14 @@ export default function FavoritesPage() {
                 className="group cursor-pointer bg-card-bg rounded-2xl border border-card-border overflow-hidden hover:shadow-lg transition-all">
                 <div className="relative h-44 overflow-hidden bg-gray-100">
                   {trip.cover_image ? (
-                    <img src={trip.cover_image} alt={trip.city} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    <img src={trip.cover_image} alt={tripLabel(trip).cities} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-gray-300"><ImageIcon size={48} /></div>
                   )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
                   <div className="absolute bottom-3 left-4 right-4">
-                    <h3 className="text-white font-bold text-lg leading-tight">{trip.city}</h3>
-                    <p className="text-white/70 text-xs">{trip.country}</p>
+                    <h3 className="text-white font-bold text-lg leading-tight">{tripLabel(trip).cities}</h3>
+                    <p className="text-white/70 text-xs">{tripLabel(trip).countries}</p>
                   </div>
                   {/* 즐겨찾기 해제 버튼 */}
                   <button

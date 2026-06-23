@@ -14,10 +14,18 @@ interface Photo {
   caption: string | null;
 }
 
+interface Destination {
+  city: string;
+  country: string;
+  start_date?: string;
+  end_date?: string;
+}
+
 interface Trip {
   id: string;
   city: string;
   country: string;
+  destinations: Destination[];
   start_date: string;
   end_date: string;
   cover_image: string | null;
@@ -29,6 +37,16 @@ interface Trip {
 
 const getDays = (s: string, e: string) =>
   Math.ceil((new Date(e).getTime() - new Date(s).getTime()) / 86400000) + 1;
+
+function tripLabel(trip: Trip): { cities: string; countries: string } {
+  const dests = trip.destinations || [];
+  if (dests.length === 0) {
+    return { cities: trip.city || "", countries: trip.country || "" };
+  }
+  const cities = [...new Set(dests.map(d => d.city))].join(", ");
+  const countries = [...new Set(dests.map(d => d.country))].join(", ");
+  return { cities, countries };
+}
 
 const dotColors = [
   "bg-primary", "bg-accent", "bg-emerald-500", "bg-violet-500",
@@ -67,7 +85,7 @@ function TripDetailModal({ trip, onClose }: { trip: Trip; onClose: () => void })
         {/* 커버 */}
         <div className="relative h-56 bg-gray-100">
           {trip.cover_image ? (
-            <img src={trip.cover_image} alt={trip.city} className="w-full h-full object-cover" />
+            <img src={trip.cover_image} alt={tripLabel(trip).cities} className="w-full h-full object-cover" />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-gray-300"><ImageIcon size={64} /></div>
           )}
@@ -77,8 +95,8 @@ function TripDetailModal({ trip, onClose }: { trip: Trip; onClose: () => void })
             <X size={16} />
           </button>
           <div className="absolute bottom-4 left-6">
-            <h2 className="text-2xl font-bold text-white">{trip.city}</h2>
-            <p className="text-white/70 text-sm">{trip.country}</p>
+            <h2 className="text-2xl font-bold text-white">{tripLabel(trip).cities}</h2>
+            <p className="text-white/70 text-sm">{tripLabel(trip).countries}</p>
           </div>
         </div>
 
@@ -91,6 +109,23 @@ function TripDetailModal({ trip, onClose }: { trip: Trip; onClose: () => void })
               <span className="flex items-center gap-1.5"><Camera size={14} /> {trip.photos.length}장</span>
             )}
           </div>
+
+          {/* 여행 일정 */}
+          {trip.destinations && trip.destinations.length > 1 && (
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted">여행 일정</p>
+              {trip.destinations.map((d, i) => (
+                <div key={i} className="flex items-center gap-2 text-xs text-muted">
+                  <span className="w-4 text-center text-[10px] font-semibold text-primary">{i + 1}</span>
+                  <span className="font-medium text-foreground">{d.city}</span>
+                  <span className="text-muted">{d.country}</span>
+                  {d.start_date && d.end_date && (
+                    <span className="ml-auto text-[10px]">{d.start_date} ~ {d.end_date}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* 메모 */}
           {trip.notes && (
@@ -161,11 +196,11 @@ function TimelineCard({ trip, index, isLeft, onClick }: { trip: Trip; index: num
           {/* 커버 이미지 */}
           {trip.cover_image && (
             <div className="relative h-36 sm:h-44 overflow-hidden">
-              <img src={trip.cover_image} alt={trip.city} className="w-full h-full object-cover" />
+              <img src={trip.cover_image} alt={tripLabel(trip).cities} className="w-full h-full object-cover" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
               <div className="absolute bottom-3 left-4">
-                <h3 className="text-white font-bold text-lg">{trip.city}</h3>
-                <p className="text-white/70 text-xs">{trip.country}</p>
+                <h3 className="text-white font-bold text-lg">{tripLabel(trip).cities}</h3>
+                <p className="text-white/70 text-xs">{tripLabel(trip).countries}</p>
               </div>
             </div>
           )}
@@ -174,8 +209,8 @@ function TimelineCard({ trip, index, isLeft, onClick }: { trip: Trip; index: num
             {/* 커버가 없을 때 제목 표시 */}
             {!trip.cover_image && (
               <div className="mb-3">
-                <h3 className="font-bold text-foreground text-lg">{trip.city}</h3>
-                <p className="text-xs text-muted">{trip.country}</p>
+                <h3 className="font-bold text-foreground text-lg">{tripLabel(trip).cities}</h3>
+                <p className="text-xs text-muted">{tripLabel(trip).countries}</p>
               </div>
             )}
 
@@ -261,7 +296,7 @@ export default function TimelinePage() {
 
   // 통계
   const totalDays = trips.reduce((sum, t) => sum + getDays(t.start_date, t.end_date), 0);
-  const totalCountries = new Set(trips.map(t => t.country)).size;
+  const totalCountries = new Set(trips.flatMap(t => (t.destinations || []).map(d => d.country))).size;
 
   return (
     <div className="space-y-6">

@@ -11,17 +11,20 @@ export async function GET(req: NextRequest) {
   const favorites = db.prepare("SELECT * FROM favorites").all() as Array<Record<string, unknown>>;
   const upcoming = db.prepare("SELECT * FROM upcoming_trips").all() as Array<Record<string, unknown>>;
   const coords = db.prepare("SELECT * FROM city_coords").all() as Array<Record<string, unknown>>;
+  const tripDestinations = db.prepare("SELECT * FROM trip_destinations ORDER BY trip_id, order_num").all() as Array<Record<string, unknown>>;
+  const upcomingDestinations = db.prepare("SELECT * FROM upcoming_trip_destinations ORDER BY trip_id, order_num").all() as Array<Record<string, unknown>>;
 
   if (format === "excel") {
     const wb = XLSX.utils.book_new();
 
     if (trips.length > 0) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trips), "여행기록");
+    if (tripDestinations.length > 0) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(tripDestinations), "여행목적지");
     if (photos.length > 0) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(photos), "사진");
     if (favorites.length > 0) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(favorites), "즐겨찾기");
     if (upcoming.length > 0) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(upcoming), "예정된여행");
+    if (upcomingDestinations.length > 0) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(upcomingDestinations), "예정여행목적지");
     if (coords.length > 0) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(coords), "좌표캐시");
 
-    // If no data at all, add empty sheet
     if (wb.SheetNames.length === 0) {
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([]), "데이터없음");
     }
@@ -38,12 +41,14 @@ export async function GET(req: NextRequest) {
 
   // Default: JSON
   return NextResponse.json({
-    version: "1.0",
+    version: "2.0",
     exported_at: new Date().toISOString(),
     trips,
+    tripDestinations,
     photos,
     favorites,
     upcoming,
+    upcomingDestinations,
     coords,
   });
 }

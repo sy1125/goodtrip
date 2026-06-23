@@ -16,10 +16,16 @@ interface Photo {
   caption: string | null;
 }
 
-interface Trip {
-  id: string;
+interface Destination {
   city: string;
   country: string;
+  start_date?: string;
+  end_date?: string;
+}
+
+interface Trip {
+  id: string;
+  destinations: Destination[];
   start_date: string;
   end_date: string;
   cover_image: string | null;
@@ -33,6 +39,17 @@ interface GeoSuggestion {
   lng: number;
   city: string;
   country: string;
+}
+
+/* ───── Helpers ───── */
+
+function tripLabel(trip: { destinations?: Destination[] }) {
+  const dests = trip.destinations || [];
+  if (dests.length === 0) return { cities: "", countries: "" };
+  return {
+    cities: dests.map(d => d.city).join(" → "),
+    countries: [...new Set(dests.map(d => d.country))].join(", "),
+  };
 }
 
 /* ───── Autocomplete Input ───── */
@@ -103,7 +120,7 @@ function AutocompleteInput({
 
   return (
     <div ref={containerRef} className="relative">
-      <label className="text-xs font-medium text-muted block mb-1.5">{label} {required && "*"}</label>
+      {label && <label className="text-xs font-medium text-muted block mb-1.5">{label} {required && "*"}</label>}
       <div className="relative">
         <input type="text" value={value} onChange={handleChange}
           onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
@@ -128,13 +145,98 @@ function AutocompleteInput({
   );
 }
 
+/* ───── Destinations Editor ───── */
+
+function DestinationsEditor({
+  destinations,
+  onChange,
+}: {
+  destinations: Destination[];
+  onChange: (dests: Destination[]) => void;
+}) {
+  const update = (index: number, field: keyof Destination, value: string) => {
+    const next = [...destinations];
+    next[index] = { ...next[index], [field]: value };
+    onChange(next);
+  };
+
+  const add = () => {
+    onChange([...destinations, { city: "", country: "" }]);
+  };
+
+  const remove = (index: number) => {
+    if (destinations.length <= 1) return;
+    onChange(destinations.filter((_, i) => i !== index));
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <label className="text-xs font-medium text-muted">목적지 *</label>
+        <button type="button" onClick={add}
+          className="flex items-center gap-1 text-xs font-medium text-primary hover:text-primary-dark">
+          <Plus size={12} /> 목적지 추가
+        </button>
+      </div>
+      {destinations.map((dest, i) => (
+        <div key={i} className="flex gap-2 items-start">
+          <span className="text-xs text-muted mt-2.5 w-5 text-center flex-shrink-0">{i + 1}</span>
+          <div className="flex-1 space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <AutocompleteInput
+                value={dest.country}
+                onChange={(v) => update(i, "country", v)}
+                placeholder="국가"
+                label=""
+                searchType="country"
+              />
+              <AutocompleteInput
+                value={dest.city}
+                onChange={(v) => update(i, "city", v)}
+                placeholder="도시"
+                label=""
+                searchType="city"
+                extraQuery={dest.country}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <input type="date" value={dest.start_date || ""} onChange={(e) => update(i, "start_date", e.target.value)}
+                className="w-full px-3 py-1.5 text-xs border border-card-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30" />
+              <input type="date" value={dest.end_date || ""} onChange={(e) => update(i, "end_date", e.target.value)}
+                className="w-full px-3 py-1.5 text-xs border border-card-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30" />
+            </div>
+          </div>
+          {destinations.length > 1 && (
+            <button type="button" onClick={() => remove(i)}
+              className="mt-2 text-muted hover:text-red-500 flex-shrink-0">
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      ))}
+      {destinations.length > 1 && (
+        <p className="text-[10px] text-muted pl-5">
+          여행 경로: {destinations.filter(d => d.city).map(d => d.city).join(" → ")}
+        </p>
+      )}
+    </div>
+  );
+}
+
 /* ───── Trip Form Modal ───── */
 
 function TripFormModal({ trip, onClose, onSaved }: { trip: Trip | null; onClose: () => void; onSaved: () => void }) {
-  const [city, setCity] = useState(trip?.city || "");
-  const [country, setCountry] = useState(trip?.country || "");
-  const [startDate, setStartDate] = useState(trip?.start_date || "");
-  const [endDate, setEndDate] = useState(trip?.end_date || "");
+  const [destinations, setDestinations] = useState<Destination[]>(
+    trip?.destinations?.length ? trip.destinations : [{ city: "", country: "" }]
+  );
+  const startDate = destinations.reduce((min, d) => {
+    if (!d.start_date) return min;
+    return !min || d.start_date < min ? d.start_date : min;
+  }, "" as string);
+  const endDate = destinations.reduce((max, d) => {
+    if (!d.end_date) return max;
+    return !max || d.end_date > max ? d.end_date : max;
+  }, "" as string);
   const [notes, setNotes] = useState(trip?.notes || "");
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>(
@@ -158,7 +260,11 @@ function TripFormModal({ trip, onClose, onSaved }: { trip: Trip | null; onClose:
   };
 
   const handleSubmit = async () => {
-    if (!city || !country || !startDate || !endDate) { alert("도시, 국가, 시작일, 종료일은 필수입니다."); return; }
+    const validDests = destinations.filter(d => d.city && d.country);
+    if (validDests.length === 0 || !startDate || !endDate) {
+      alert("최소 하나의 목적지(도시, 국가)와 각 목적지의 날짜는 필수입니다.");
+      return;
+    }
     setSaving(true);
     try {
       const uploadedPaths: string[] = [];
@@ -184,7 +290,8 @@ function TripFormModal({ trip, onClose, onSaved }: { trip: Trip | null; onClose:
       }
 
       const body = {
-        city, country, start_date: startDate, end_date: endDate,
+        destinations: validDests,
+        start_date: startDate, end_date: endDate,
         cover_image: allPaths[0] || null, notes: notes || null,
         photo_paths: allPaths.slice(1),
       };
@@ -246,21 +353,7 @@ function TripFormModal({ trip, onClose, onSaved }: { trip: Trip | null; onClose:
             )}
           </div>
 
-          <AutocompleteInput value={country} onChange={setCountry} placeholder="예: 일본, 프랑스" label="국가" required searchType="country" />
-          <AutocompleteInput value={city} onChange={setCity} placeholder="예: 도쿄, 파리" label="도시" required searchType="city" extraQuery={country} />
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-medium text-muted block mb-1.5">시작일 *</label>
-              <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-card-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/30" />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted block mb-1.5">종료일 *</label>
-              <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-card-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/30" />
-            </div>
-          </div>
+          <DestinationsEditor destinations={destinations} onChange={setDestinations} />
 
           <div>
             <label className="text-xs font-medium text-muted block mb-1.5">메모</label>
@@ -286,6 +379,7 @@ function TripFormModal({ trip, onClose, onSaved }: { trip: Trip | null; onClose:
 function TripDetailModal({ trip, onClose, onEdit, onRefresh }: { trip: Trip; onClose: () => void; onEdit: () => void; onRefresh: () => void }) {
   const [photoIndex, setPhotoIndex] = useState(0);
   const days = Math.ceil((new Date(trip.end_date).getTime() - new Date(trip.start_date).getTime()) / 86400000) + 1;
+  const { cities, countries } = tripLabel(trip);
 
   const handleDeletePhoto = async (photoId: number) => {
     if (!confirm("이 사진을 삭제하시겠습니까?")) return;
@@ -298,15 +392,15 @@ function TripDetailModal({ trip, onClose, onEdit, onRefresh }: { trip: Trip; onC
       <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="relative h-56 bg-gray-100">
           {trip.cover_image ? (
-            <img src={trip.cover_image} alt={trip.city} className="w-full h-full object-cover" />
+            <img src={trip.cover_image} alt={cities} className="w-full h-full object-cover" />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-gray-300"><ImageIcon size={64} /></div>
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
           <button onClick={onClose} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-black/30 text-white flex items-center justify-center hover:bg-black/50"><X size={16} /></button>
           <div className="absolute bottom-4 left-6">
-            <h2 className="text-2xl font-bold text-white">{trip.city}</h2>
-            <p className="text-white/70 text-sm">{trip.country}</p>
+            <h2 className="text-2xl font-bold text-white">{cities}</h2>
+            <p className="text-white/70 text-sm">{countries}</p>
           </div>
         </div>
         <div className="p-6 space-y-5">
@@ -314,6 +408,21 @@ function TripDetailModal({ trip, onClose, onEdit, onRefresh }: { trip: Trip; onC
             <span className="flex items-center gap-1.5"><Calendar size={14} /> {trip.start_date} — {trip.end_date}</span>
             <span className="flex items-center gap-1.5"><Clock size={14} /> {days}일</span>
           </div>
+          {trip.destinations && trip.destinations.length > 1 && (
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted">여행 일정</p>
+              {trip.destinations.map((d, i) => (
+                <div key={i} className="flex items-center gap-2 text-xs text-muted">
+                  <span className="w-4 text-center text-[10px] font-semibold text-primary">{i + 1}</span>
+                  <span className="font-medium text-foreground">{d.city}</span>
+                  <span className="text-muted">{d.country}</span>
+                  {d.start_date && d.end_date && (
+                    <span className="ml-auto text-[10px]">{d.start_date} ~ {d.end_date}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
           {trip.notes && (
             <div>
               <p className="text-xs font-medium text-muted mb-1">메모</p>
@@ -361,7 +470,7 @@ function TripDetailModal({ trip, onClose, onEdit, onRefresh }: { trip: Trip; onC
 /* ───── Main Page ───── */
 
 type ViewMode = "grid" | "list";
-type SortField = "start_date" | "city" | "country";
+type SortField = "start_date";
 type SortOrder = "DESC" | "ASC";
 
 export default function TripsPage() {
@@ -478,8 +587,6 @@ export default function TripsPage() {
             <select value={sortField} onChange={(e) => { setSortField(e.target.value as SortField); setPage(0); }}
               className="px-3 py-2 text-sm border border-card-border rounded-lg bg-white">
               <option value="start_date">날짜</option>
-              <option value="city">도시</option>
-              <option value="country">국가</option>
             </select>
           </div>
           <button onClick={() => { setSortOrder(sortOrder === "DESC" ? "ASC" : "DESC"); setPage(0); }}
@@ -520,19 +627,20 @@ export default function TripsPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {trips.map((trip) => {
             const days = getDays(trip.start_date, trip.end_date);
+            const { cities, countries } = tripLabel(trip);
             return (
               <div key={trip.id} onClick={() => setDetailTrip(trip)}
                 className="group cursor-pointer bg-card-bg rounded-2xl border border-card-border overflow-hidden hover:shadow-lg transition-all">
                 <div className="relative h-44 overflow-hidden bg-gray-100">
                   {trip.cover_image ? (
-                    <img src={trip.cover_image} alt={trip.city} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    <img src={trip.cover_image} alt={cities} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-gray-300"><ImageIcon size={48} /></div>
                   )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
                   <div className="absolute bottom-3 left-4 right-4">
-                    <h3 className="text-white font-bold text-lg leading-tight">{trip.city}</h3>
-                    <p className="text-white/70 text-xs">{trip.country}</p>
+                    <h3 className="text-white font-bold text-lg leading-tight">{cities}</h3>
+                    <p className="text-white/70 text-xs">{countries}</p>
                   </div>
                   <div className="absolute top-3 left-3 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button onClick={(e) => { e.stopPropagation(); setEditingTrip(trip); setShowForm(true); }}
@@ -567,6 +675,7 @@ export default function TripsPage() {
         <div className="bg-card-bg rounded-2xl border border-card-border divide-y divide-card-border">
           {trips.map((trip) => {
             const days = getDays(trip.start_date, trip.end_date);
+            const { cities, countries } = tripLabel(trip);
             return (
               <div key={trip.id} onClick={() => setDetailTrip(trip)}
                 className="flex items-center gap-4 p-4 hover:bg-gray-50 cursor-pointer transition-colors group">
@@ -579,8 +688,8 @@ export default function TripsPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <h3 className="font-semibold text-foreground truncate">{trip.city}</h3>
-                    <span className="text-xs text-muted">{trip.country}</span>
+                    <h3 className="font-semibold text-foreground truncate">{cities}</h3>
+                    <span className="text-xs text-muted">{countries}</span>
                   </div>
                   <div className="flex items-center gap-3 text-xs text-muted mt-1">
                     <span className="flex items-center gap-1"><Calendar size={11} /> {trip.start_date} — {trip.end_date}</span>

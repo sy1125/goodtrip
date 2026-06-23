@@ -8,14 +8,40 @@ import {
 
 /* ───── Types ───── */
 
+interface Destination {
+  city: string;
+  country: string;
+  start_date?: string;
+  end_date?: string;
+}
+
 interface UpcomingTrip {
   id: string;
   city: string;
   country: string;
+  destinations: Destination[];
   start_date: string;
   end_date: string;
   notes: string | null;
   created_at: string;
+}
+
+/* ───── Helpers ───── */
+
+function getDestinations(trip: UpcomingTrip): Destination[] {
+  if (trip.destinations && trip.destinations.length > 0) {
+    return trip.destinations;
+  }
+  // Fallback for legacy data that only has city/country
+  return [{ city: trip.city, country: trip.country }];
+}
+
+function formatCities(dests: Destination[]): string {
+  return dests.map((d) => d.city).join(" → ");
+}
+
+function formatCountries(dests: Destination[]): string {
+  return [...new Set(dests.map((d) => d.country))].join(", ");
 }
 
 /* ───── Main Page ───── */
@@ -121,6 +147,7 @@ export default function UpcomingPage() {
                 {upcomingTrips.map((trip) => {
                   const daysUntil = getDaysUntil(trip.start_date);
                   const duration = getDuration(trip.start_date, trip.end_date);
+                  const dests = getDestinations(trip);
                   return (
                     <div
                       key={trip.id}
@@ -135,8 +162,11 @@ export default function UpcomingPage() {
                           </div>
                           <div>
                             <h3 className="text-lg font-bold text-foreground">
-                              {trip.city}, {trip.country}
+                              {formatCities(dests)}
                             </h3>
+                            <p className="text-xs text-muted">
+                              {formatCountries(dests)}
+                            </p>
                             <div className="flex items-center gap-3 mt-1.5 text-sm text-muted">
                               <span className="flex items-center gap-1">
                                 <Calendar size={13} />
@@ -146,6 +176,19 @@ export default function UpcomingPage() {
                                 {duration}박 {duration + 1}일
                               </span>
                             </div>
+                            {dests.length > 1 && dests.some(d => d.start_date) && (
+                              <div className="mt-2 space-y-1">
+                                {dests.map((d, i) => (
+                                  <div key={i} className="flex items-center gap-2 text-xs text-muted">
+                                    <span className="w-4 text-center text-[10px] font-semibold text-primary">{i + 1}</span>
+                                    <span className="font-medium text-foreground">{d.city}</span>
+                                    {d.start_date && d.end_date && (
+                                      <span className="text-[10px]">{d.start_date} ~ {d.end_date}</span>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                             {trip.notes && (
                               <p className="text-sm text-muted mt-2 flex items-start gap-1.5">
                                 <FileText size={13} className="mt-0.5 flex-shrink-0" />
@@ -187,6 +230,7 @@ export default function UpcomingPage() {
               <div className="grid gap-3">
                 {pastTrips.map((trip) => {
                   const duration = getDuration(trip.start_date, trip.end_date);
+                  const dests = getDestinations(trip);
                   return (
                     <div
                       key={trip.id}
@@ -197,10 +241,10 @@ export default function UpcomingPage() {
                           <MapPin size={16} className="text-muted" />
                           <div>
                             <h3 className="text-sm font-semibold text-foreground">
-                              {trip.city}, {trip.country}
+                              {formatCities(dests)}
                             </h3>
                             <p className="text-xs text-muted">
-                              {formatDate(trip.start_date)} — {formatDate(trip.end_date)} ({duration}박 {duration + 1}일)
+                              {formatCountries(dests)} | {formatDate(trip.start_date)} — {formatDate(trip.end_date)} ({duration}박 {duration + 1}일)
                             </p>
                           </div>
                         </div>
@@ -243,20 +287,48 @@ function TripFormModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [city, setCity] = useState(trip?.city || "");
-  const [country, setCountry] = useState(trip?.country || "");
-  const [startDate, setStartDate] = useState(trip?.start_date || "");
-  const [endDate, setEndDate] = useState(trip?.end_date || "");
+  const initialDestinations: Destination[] =
+    trip && trip.destinations && trip.destinations.length > 0
+      ? trip.destinations
+      : trip
+        ? [{ city: trip.city, country: trip.country }]
+        : [{ city: "", country: "" }];
+
+  const [destinations, setDestinations] = useState<Destination[]>(initialDestinations);
+  const startDate = destinations.reduce((min, d) => {
+    if (!d.start_date) return min;
+    return !min || d.start_date < min ? d.start_date : min;
+  }, "" as string);
+  const endDate = destinations.reduce((max, d) => {
+    if (!d.end_date) return max;
+    return !max || d.end_date > max ? d.end_date : max;
+  }, "" as string);
   const [notes, setNotes] = useState(trip?.notes || "");
   const [saving, setSaving] = useState(false);
 
+  const updateDestination = (index: number, field: keyof Destination, value: string) => {
+    setDestinations((prev) =>
+      prev.map((d, i) => (i === index ? { ...d, [field]: value } : d))
+    );
+  };
+
+  const addDestination = () => {
+    setDestinations((prev) => [...prev, { city: "", country: "" }]);
+  };
+
+  const removeDestination = (index: number) => {
+    setDestinations((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const allDestinationsValid = destinations.every((d) => d.city.trim() && d.country.trim());
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!city || !country || !startDate || !endDate) return;
+    if (!allDestinationsValid || !startDate || !endDate) return;
 
     setSaving(true);
     try {
-      const body = { city, country, start_date: startDate, end_date: endDate, notes };
+      const body = { destinations, start_date: startDate, end_date: endDate, notes };
 
       if (trip) {
         await fetch(`/api/upcoming/${trip.id}`, {
@@ -273,7 +345,7 @@ function TripFormModal({
       }
       onSaved();
     } catch {
-      alert("저장에 실패했습니다.");
+      alert("각 목적지의 날짜는 필수입니다");
     } finally {
       setSaving(false);
     }
@@ -282,7 +354,7 @@ function TripFormModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
       <div
-        className="bg-white rounded-2xl w-full max-w-md mx-4 p-6 shadow-xl"
+        className="bg-white rounded-2xl w-full max-w-md mx-4 p-6 shadow-xl max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-5">
@@ -295,52 +367,78 @@ function TripFormModal({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-medium text-muted mb-1 block">국가 *</label>
-              <input
-                type="text"
-                value={country}
-                onChange={(e) => setCountry(e.target.value)}
-                placeholder="예: 일본"
-                className="w-full px-3 py-2.5 border border-card-border rounded-xl text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
-                required
-              />
+          {/* Destinations */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-medium text-muted">목적지 *</label>
+              <button
+                type="button"
+                onClick={addDestination}
+                className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 font-medium transition-colors"
+              >
+                <Plus size={13} />
+                목적지 추가
+              </button>
             </div>
-            <div>
-              <label className="text-xs font-medium text-muted mb-1 block">도시 *</label>
-              <input
-                type="text"
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-                placeholder="예: 도쿄"
-                className="w-full px-3 py-2.5 border border-card-border rounded-xl text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
-                required
-              />
+            <div className="space-y-2">
+              {destinations.map((dest, index) => (
+                <div key={index} className="flex gap-2 items-start">
+                  <span className="text-xs text-muted font-medium w-5 text-center flex-shrink-0 mt-2.5">
+                    {index + 1}
+                  </span>
+                  <div className="flex-1 space-y-2">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={dest.country}
+                        onChange={(e) => updateDestination(index, "country", e.target.value)}
+                        placeholder="국가"
+                        className="flex-1 px-3 py-2.5 border border-card-border rounded-xl text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                        required
+                      />
+                      <input
+                        type="text"
+                        value={dest.city}
+                        onChange={(e) => updateDestination(index, "city", e.target.value)}
+                        placeholder="도시"
+                        className="flex-1 px-3 py-2.5 border border-card-border rounded-xl text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                        required
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="date"
+                        value={dest.start_date || ""}
+                        onChange={(e) => updateDestination(index, "start_date", e.target.value)}
+                        className="w-full px-3 py-1.5 text-xs border border-card-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      />
+                      <input
+                        type="date"
+                        value={dest.end_date || ""}
+                        onChange={(e) => updateDestination(index, "end_date", e.target.value)}
+                        className="w-full px-3 py-1.5 text-xs border border-card-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      />
+                    </div>
+                  </div>
+                  {destinations.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeDestination(index)}
+                      className="p-1.5 text-muted hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0 mt-2"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+              ))}
             </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-medium text-muted mb-1 block">출발일 *</label>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-full px-3 py-2.5 border border-card-border rounded-xl text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
-                required
-              />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted mb-1 block">도착일 *</label>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="w-full px-3 py-2.5 border border-card-border rounded-xl text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
-                required
-              />
-            </div>
+            {/* Route preview */}
+            {destinations.length > 1 && destinations.some((d) => d.city.trim()) && (
+              <p className="text-xs text-primary mt-2 flex items-center gap-1">
+                <MapPin size={12} />
+                여행 경로: {destinations.filter((d) => d.city.trim()).map((d) => d.city).join(" → ")}
+              </p>
+            )}
           </div>
 
           <div>
@@ -356,7 +454,7 @@ function TripFormModal({
 
           <button
             type="submit"
-            disabled={saving || !city || !country || !startDate || !endDate}
+            disabled={saving || !allDestinationsValid || !startDate || !endDate}
             className="w-full py-2.5 bg-primary text-white rounded-xl text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
           >
             {saving ? "저장 중..." : trip ? "수정하기" : "추가하기"}

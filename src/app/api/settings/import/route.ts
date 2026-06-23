@@ -14,15 +14,26 @@ interface TripRow {
   created_at?: string;
 }
 
+interface DestRow {
+  trip_id: string;
+  city: string;
+  country: string;
+  order_num: number;
+  start_date?: string;
+  end_date?: string;
+}
+
 function parseJsonImport(data: Record<string, unknown>) {
   if (!data.trips || !Array.isArray(data.trips)) {
     throw new Error("Invalid JSON format");
   }
   return data as {
     trips: TripRow[];
+    tripDestinations?: DestRow[];
     photos?: { id?: number; trip_id: string; file_path: string; caption?: string; created_at?: string }[];
     favorites?: { trip_id: string; created_at?: string }[];
     upcoming?: { id?: string; city: string; country: string; start_date: string; end_date: string; notes?: string; created_at?: string }[];
+    upcomingDestinations?: DestRow[];
     coords?: { city: string; country: string; lat: number; lng: number }[];
   };
 }
@@ -31,16 +42,17 @@ function parseExcelImport(buffer: ArrayBuffer) {
   const wb = XLSX.read(buffer, { type: "array" });
 
   const trips: TripRow[] = [];
-  // Try to find trips sheet by various names
+  const tripDestinations: DestRow[] = [];
+
   const tripsSheet = wb.Sheets["여행기록"] || wb.Sheets["trips"] || wb.Sheets[wb.SheetNames[0]];
   if (tripsSheet) {
     const rows = XLSX.utils.sheet_to_json<Record<string, string>>(tripsSheet);
     for (const row of rows) {
-      if (row.city && row.country && row.start_date && row.end_date) {
+      if (row.start_date && row.end_date) {
         trips.push({
           id: row.id || uuidv4(),
-          city: row.city,
-          country: row.country,
+          city: row.city || "",
+          country: row.country || "",
           start_date: row.start_date,
           end_date: row.end_date,
           cover_image: row.cover_image || undefined,
@@ -51,7 +63,25 @@ function parseExcelImport(buffer: ArrayBuffer) {
     }
   }
 
-  return { trips };
+  // Try to read destinations sheet
+  const destSheet = wb.Sheets["여행목적지"] || wb.Sheets["trip_destinations"];
+  if (destSheet) {
+    const rows = XLSX.utils.sheet_to_json<Record<string, string>>(destSheet);
+    for (const row of rows) {
+      if (row.trip_id && row.city && row.country) {
+        tripDestinations.push({
+          trip_id: row.trip_id,
+          city: row.city,
+          country: row.country,
+          order_num: Number(row.order_num) || 0,
+          start_date: row.start_date || undefined,
+          end_date: row.end_date || undefined,
+        });
+      }
+    }
+  }
+
+  return { trips, tripDestinations };
 }
 
 export async function POST(req: NextRequest) {
@@ -59,13 +89,14 @@ export async function POST(req: NextRequest) {
     const contentType = req.headers.get("content-type") || "";
 
     let trips: TripRow[] = [];
+    let tripDestinations: DestRow[] = [];
     let photos: { id?: number; trip_id: string; file_path: string; caption?: string; created_at?: string }[] = [];
     let favorites: { trip_id: string; created_at?: string }[] = [];
     let upcoming: { id?: string; city: string; country: string; start_date: string; end_date: string; notes?: string; created_at?: string }[] = [];
+    let upcomingDestinations: DestRow[] = [];
     let coords: { city: string; country: string; lat: number; lng: number }[] = [];
 
     if (contentType.includes("multipart/form-data")) {
-      // Excel file upload
       const formData = await req.formData();
       const file = formData.get("file") as File;
       if (!file) return NextResponse.json({ error: "No file" }, { status: 400 });
@@ -73,14 +104,16 @@ export async function POST(req: NextRequest) {
       const buffer = await file.arrayBuffer();
       const parsed = parseExcelImport(buffer);
       trips = parsed.trips;
+      tripDestinations = parsed.tripDestinations;
     } else {
-      // JSON
       const data = await req.json();
       const parsed = parseJsonImport(data);
       trips = parsed.trips;
+      tripDestinations = parsed.tripDestinations || [];
       photos = parsed.photos || [];
       favorites = parsed.favorites || [];
       upcoming = parsed.upcoming || [];
+      upcomingDestinations = parsed.upcomingDestinations || [];
       coords = parsed.coords || [];
     }
 
@@ -93,8 +126,27 @@ export async function POST(req: NextRequest) {
         INSERT OR REPLACE INTO trips (id, city, country, start_date, end_date, cover_image, notes, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `);
+      const insertDest = db.prepare(`
+        INSERT INTO trip_destinations (trip_id, city, country, order_num, start_date, end_date) VALUES (?, ?, ?, ?, ?, ?)
+      `);
+
       for (const t of trips) {
-        insertTrip.run(t.id || uuidv4(), t.city, t.country, t.start_date, t.end_date, t.cover_image || null, t.notes || null, t.created_at || new Date().toISOString());
+        const tripId = t.id || uuidv4();
+        insertTrip.run(tripId, t.city, t.country, t.start_date, t.end_date, t.cover_image || null, t.notes || null, t.created_at || new Date().toISOString());
+
+        // Delete existing destinations for this trip before inserting
+        db.prepare("DELETE FROM trip_destinations WHERE trip_id = ?").run(tripId);
+
+        // Check if we have destinations data for this trip
+        const destsForTrip = tripDestinations.filter(d => d.trip_id === tripId);
+        if (destsForTrip.length > 0) {
+          for (const d of destsForTrip) {
+            insertDest.run(tripId, d.city, d.country, d.order_num, d.start_date || null, d.end_date || null);
+          }
+        } else if (t.city && t.country) {
+          // Fallback: create destination from trip's city/country (backward compat)
+          insertDest.run(tripId, t.city, t.country, 0, t.start_date, t.end_date);
+        }
       }
 
       if (photos.length > 0) {
@@ -119,8 +171,24 @@ export async function POST(req: NextRequest) {
           INSERT OR REPLACE INTO upcoming_trips (id, city, country, start_date, end_date, notes, created_at)
           VALUES (?, ?, ?, ?, ?, ?, ?)
         `);
+        const insertUpDest = db.prepare(
+          "INSERT INTO upcoming_trip_destinations (trip_id, city, country, order_num, start_date, end_date) VALUES (?, ?, ?, ?, ?, ?)"
+        );
+
         for (const u of upcoming) {
-          insertUp.run(u.id || uuidv4(), u.city, u.country, u.start_date, u.end_date, u.notes || null, u.created_at);
+          const upId = u.id || uuidv4();
+          insertUp.run(upId, u.city, u.country, u.start_date, u.end_date, u.notes || null, u.created_at);
+
+          db.prepare("DELETE FROM upcoming_trip_destinations WHERE trip_id = ?").run(upId);
+
+          const destsForUp = upcomingDestinations.filter(d => d.trip_id === upId);
+          if (destsForUp.length > 0) {
+            for (const d of destsForUp) {
+              insertUpDest.run(upId, d.city, d.country, d.order_num, d.start_date || null, d.end_date || null);
+            }
+          } else if (u.city && u.country) {
+            insertUpDest.run(upId, u.city, u.country, 0, u.start_date, u.end_date);
+          }
         }
       }
 

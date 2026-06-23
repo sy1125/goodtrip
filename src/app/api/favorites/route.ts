@@ -10,10 +10,12 @@ export async function GET() {
   `).all() as Array<Record<string, unknown>>;
 
   const stmtPhotos = db.prepare("SELECT id, file_path, caption FROM trip_photos WHERE trip_id = ?");
+  const stmtDests = db.prepare("SELECT id, city, country, order_num, start_date, end_date FROM trip_destinations WHERE trip_id = ? ORDER BY order_num");
 
   const result = favorites.map((trip) => ({
     ...trip,
     photos: stmtPhotos.all(trip.id as string),
+    destinations: stmtDests.all(trip.id as string),
   }));
 
   return NextResponse.json(result);

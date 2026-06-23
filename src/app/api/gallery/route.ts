@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
   const params: (string | number)[] = [];
 
   if (country) {
-    where = "WHERE t.country = ?";
+    where = "WHERE t.id IN (SELECT trip_id FROM trip_destinations WHERE country = ?)";
     params.push(country);
   }
 
@@ -21,9 +21,12 @@ export async function GET(req: NextRequest) {
     ${where}
   `).get(...params) as { total: number };
 
+  // Get photos with first destination info
   const photos = db.prepare(`
     SELECT p.id, p.file_path, p.caption, p.created_at,
-           t.id as trip_id, t.city, t.country, t.start_date, t.cover_image
+           t.id as trip_id, t.start_date, t.cover_image,
+           (SELECT td.city FROM trip_destinations td WHERE td.trip_id = t.id ORDER BY td.order_num LIMIT 1) as city,
+           (SELECT td.country FROM trip_destinations td WHERE td.trip_id = t.id ORDER BY td.order_num LIMIT 1) as country
     FROM trip_photos p
     JOIN trips t ON t.id = p.trip_id
     ${where}
@@ -33,16 +36,18 @@ export async function GET(req: NextRequest) {
 
   // Also include cover images from trips
   const coverPhotos = db.prepare(`
-    SELECT t.id as trip_id, t.cover_image as file_path, t.city, t.country, t.start_date, t.cover_image
+    SELECT t.id as trip_id, t.cover_image as file_path, t.start_date, t.cover_image,
+           (SELECT td.city FROM trip_destinations td WHERE td.trip_id = t.id ORDER BY td.order_num LIMIT 1) as city,
+           (SELECT td.country FROM trip_destinations td WHERE td.trip_id = t.id ORDER BY td.order_num LIMIT 1) as country
     FROM trips t
     WHERE t.cover_image IS NOT NULL
-    ${country ? "AND t.country = ?" : ""}
+    ${country ? "AND t.id IN (SELECT trip_id FROM trip_destinations WHERE country = ?)" : ""}
     ORDER BY t.start_date DESC
   `).all(...(country ? [country] : [])) as Array<Record<string, unknown>>;
 
   // Get unique countries for filter
   const countries = db.prepare(`
-    SELECT DISTINCT country FROM trips ORDER BY country
+    SELECT DISTINCT country FROM trip_destinations ORDER BY country
   `).all() as Array<{ country: string }>;
 
   return NextResponse.json({

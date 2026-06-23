@@ -8,6 +8,13 @@ import {
 
 /* ───── Types ───── */
 
+interface Destination {
+  city: string;
+  country: string;
+  start_date?: string;
+  end_date?: string;
+}
+
 interface Stats {
   totalTrips: number;
   totalCountries: number;
@@ -17,7 +24,7 @@ interface Stats {
   avgDays: number;
   countries: { country: string; visits: number; last_visit: string }[];
   monthlyTrips: { month: number; trips: number }[];
-  timeline: { id: string; city: string; country: string; start_date: string; end_date: string; days: number }[];
+  timeline: { id: string; city: string; country: string; destinations: Destination[]; start_date: string; end_date: string; days: number }[];
 }
 
 interface YearlyData {
@@ -142,8 +149,8 @@ export default function StatsPage() {
   if (!stats) return null;
 
   // 추가 계산
-  const longestTrip = stats.timeline.reduce<{ city: string; country: string; days: number } | null>((max, t) =>
-    !max || t.days > max.days ? { city: t.city, country: t.country, days: t.days } : max, null);
+  const longestTrip = stats.timeline.reduce<{ city: string; days: number } | null>((max, t) =>
+    !max || t.days > max.days ? { city: t.city, days: t.days } : max, null);
 
   const mostVisitedCountry = stats.countries.length > 0 ? stats.countries.reduce((a, b) => a.visits > b.visits ? a : b) : null;
   const mostVisitedMonth = stats.monthlyTrips.reduce((a, b) => a.trips > b.trips ? a : b);
@@ -182,7 +189,7 @@ export default function StatsPage() {
         {longestTrip && (
           <div className="bg-gradient-to-br from-primary/5 to-primary/10 rounded-2xl border border-primary/20 p-5">
             <p className="text-xs font-medium text-primary mb-1">가장 긴 여행</p>
-            <p className="text-lg font-bold text-foreground">{longestTrip.city}, {longestTrip.country}</p>
+            <p className="text-lg font-bold text-foreground">{longestTrip.city}</p>
             <p className="text-sm text-muted">{longestTrip.days}일</p>
           </div>
         )}

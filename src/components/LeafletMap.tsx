@@ -14,6 +14,7 @@ interface TripLocation {
   notes: string | null;
   lat: number | null;
   lng: number | null;
+  destinations?: { city: string; country: string }[];
 }
 
 interface LeafletMapProps {
@@ -90,7 +91,7 @@ export default function LeafletMap({ trips, selectedTripId, onMarkerClick, flyTo
       });
 
       // 도시명 툴팁
-      marker.bindTooltip(trip.city, {
+      marker.bindTooltip(trip.destinations && trip.destinations.length > 1 ? trip.destinations.map(d => d.city).join(" → ") : trip.city, {
         permanent: false,
         direction: "top",
         offset: [0, -8],
@@ -123,7 +124,7 @@ export default function LeafletMap({ trips, selectedTripId, onMarkerClick, flyTo
           border-top-color: #1c1917;
         }
       `}</style>
-      <div ref={containerRef} style={{ width: "100%", height: "500px" }} />
+      <div ref={containerRef} style={{ width: "100%", height: "500px", zIndex: 0, position: "relative" }} />
     </>
   );
 }

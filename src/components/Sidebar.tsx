@@ -21,8 +21,8 @@ import {
 } from "lucide-react";
 
 const navItems = [
-  { icon: Globe2, label: "홈", href: "/" },
-  { icon: Map, label: "세계 지도", href: "/map" },
+  { icon: Globe2, label: "세계 지도", href: "/" },
+  { icon: Map, label: "대시보드", href: "/dashboard" },
   { icon: BookOpen, label: "여행 기록", href: "/trips" },
   { icon: Camera, label: "갤러리", href: "/gallery" },
   { icon: CalendarRange, label: "캘린더", href: "/calendar" },
@@ -42,7 +42,7 @@ export default function Sidebar() {
       {/* Mobile toggle */}
       <button
         onClick={() => setMobileOpen(true)}
-        className="fixed top-4 left-4 z-50 lg:hidden w-10 h-10 flex items-center justify-center rounded-xl bg-sidebar-bg text-white shadow-lg"
+        className="fixed top-4 left-4 z-[1000] lg:hidden w-10 h-10 flex items-center justify-center rounded-xl bg-sidebar-bg text-white shadow-lg"
       >
         <Menu size={20} />
       </button>
@@ -50,14 +50,14 @@ export default function Sidebar() {
       {/* Overlay */}
       {mobileOpen && (
         <div
-          className="fixed inset-0 bg-black/40 z-40 lg:hidden"
+          className="fixed inset-0 bg-black/40 z-[1000] lg:hidden"
           onClick={() => setMobileOpen(false)}
         />
       )}
 
       {/* Sidebar */}
       <aside
-        className={`fixed top-0 left-0 z-50 h-full w-64 bg-sidebar-bg flex flex-col transition-transform duration-300 lg:translate-x-0 ${
+        className={`fixed top-0 left-0 z-[1001] h-full w-64 bg-sidebar-bg flex flex-col transition-transform duration-300 lg:translate-x-0 ${
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -82,7 +82,7 @@ export default function Sidebar() {
         {/* Nav */}
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
-            const isActive = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+            const isActive = item.href === "/" ? pathname === "/" : pathname === item.href || pathname.startsWith(item.href + "/");
             return (
               <Link
                 key={item.label}
